@@ -1,8 +1,6 @@
 import axios from 'axios'
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  (import.meta.env.PROD ? '/sageaid-server/api' : '/api')
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const TOKEN_KEY = 'sageaid_admin_token'
 
 export const http = axios.create({
