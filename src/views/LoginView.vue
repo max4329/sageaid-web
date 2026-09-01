@@ -45,44 +45,6 @@
               </template>
             </el-input>
           </el-form-item>
-          <el-form-item>
-            <div class="puzzle" :style="{ width: puzzle.width + 'px' }">
-              <div class="puzzle-board" :class="{ success: verified }" :style="{ height: puzzle.height + 'px' }">
-                <img v-if="puzzle.background" class="puzzle-bg" :src="puzzle.background" alt="" />
-                <img
-                  v-if="puzzle.piece"
-                  class="puzzle-piece"
-                  :src="puzzle.piece"
-                  alt=""
-                  :style="{
-                    left: offsetX - puzzle.padLeft + 'px',
-                    top: puzzle.pieceY - puzzle.padTop + 'px',
-                  }"
-                />
-                <button class="refresh" type="button" title="刷新验证" @click="loadCaptcha">
-                  <el-icon :size="14"><RefreshRight /></el-icon>
-                </button>
-              </div>
-              <div
-                class="slider"
-                :class="{ success: verified, fail: failed, dragging }"
-                @pointerdown="onPointerDown"
-              >
-                <div
-                  class="slider-track"
-                  :style="{ width: offsetX + puzzle.pieceSize + 'px' }"
-                />
-                <div
-                  class="slider-handle"
-                  :style="{ left: offsetX + 'px', width: puzzle.pieceSize + 'px' }"
-                >
-                  <span class="chevrons">››</span>
-                </div>
-                <span v-if="!verified" class="slider-hint">向右滑动填充拼图</span>
-                <span v-else class="slider-hint success-text">验证成功</span>
-              </div>
-            </div>
-          </el-form-item>
           <el-button
             type="primary"
             size="large"
@@ -95,11 +57,61 @@
         </el-form>
       </section>
     </div>
+
+    <el-dialog
+      v-model="captchaVisible"
+      class="captcha-dialog"
+      title="安全验证"
+      width="412px"
+      align-center
+      :append-to-body="false"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!auth.loading"
+      :show-close="!auth.loading"
+      @closed="resetPuzzle"
+    >
+      <div class="puzzle" :style="{ width: puzzle.width + 'px' }">
+        <div class="puzzle-board" :class="{ success: verified }" :style="{ height: puzzle.height + 'px' }">
+          <img v-if="puzzle.background" class="puzzle-bg" :src="puzzle.background" alt="" />
+          <img
+            v-if="puzzle.piece"
+            class="puzzle-piece"
+            :src="puzzle.piece"
+            alt=""
+            :style="{
+              left: offsetX - puzzle.padLeft + 'px',
+              top: puzzle.pieceY - puzzle.padTop + 'px',
+            }"
+          />
+          <button class="refresh" type="button" title="刷新验证" :disabled="auth.loading" @click="loadCaptcha">
+            <el-icon :size="14"><RefreshRight /></el-icon>
+          </button>
+        </div>
+        <div
+          class="slider"
+          :class="{ success: verified, fail: failed, dragging }"
+          @pointerdown="onPointerDown"
+        >
+          <div
+            class="slider-track"
+            :style="{ width: offsetX + puzzle.pieceSize + 'px' }"
+          />
+          <div
+            class="slider-handle"
+            :style="{ left: offsetX + 'px', width: puzzle.pieceSize + 'px' }"
+          >
+            <span class="chevrons">››</span>
+          </div>
+          <span v-if="!verified" class="slider-hint">向右滑动填充拼图</span>
+          <span v-else class="slider-hint success-text">验证成功</span>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, RefreshRight, User } from '@element-plus/icons-vue'
@@ -110,6 +122,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
+const captchaVisible = ref(false)
 const puzzle = reactive({
   captchaId: '',
   background: '',
@@ -128,6 +141,14 @@ const ticket = ref('')
 const dragging = ref(false)
 const startClientX = ref(0)
 const startOffset = ref(0)
+let failCloseTimer = 0
+
+function clearFailCloseTimer() {
+  if (failCloseTimer) {
+    clearTimeout(failCloseTimer)
+    failCloseTimer = 0
+  }
+}
 
 const form = reactive({
   username: auth.username || '',
@@ -135,6 +156,29 @@ const form = reactive({
 })
 
 const maxOffset = () => Math.max(0, Number(puzzle.width || 360) - Number(puzzle.pieceSize || 36))
+
+function unbindPointer() {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  dragging.value = false
+}
+
+function resetPuzzle() {
+  unbindPointer()
+  clearFailCloseTimer()
+  verified.value = false
+  failed.value = false
+  ticket.value = ''
+  offsetX.value = 0
+  puzzle.captchaId = ''
+  puzzle.background = ''
+  puzzle.piece = ''
+}
+
+function closeCaptcha() {
+  captchaVisible.value = false
+  resetPuzzle()
+}
 
 async function loadCaptcha() {
   verified.value = false
@@ -155,11 +199,12 @@ async function loadCaptcha() {
   } catch (e) {
     const msg = e?.response?.data?.message || e?.message || '获取验证失败'
     ElMessage.error(msg)
+    closeCaptcha()
   }
 }
 
 function onPointerDown(event) {
-  if (verified.value || auth.loading) return
+  if (verified.value || failed.value || auth.loading || !puzzle.captchaId) return
   dragging.value = true
   startClientX.value = event.clientX
   startOffset.value = offsetX.value
@@ -175,9 +220,7 @@ function onPointerMove(event) {
 
 async function onPointerUp() {
   if (!dragging.value) return
-  dragging.value = false
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
+  unbindPointer()
   try {
     const res = await verifyCaptcha({
       captchaId: puzzle.captchaId,
@@ -186,30 +229,19 @@ async function onPointerUp() {
     ticket.value = res?.ticket || ''
     verified.value = true
     failed.value = false
+    await submitLogin()
   } catch (e) {
     failed.value = true
     const msg = e?.response?.data?.message || e?.message || '滑动验证失败'
     ElMessage.error(msg)
-    if (String(msg).includes('刷新')) {
-      await loadCaptcha()
-      return
-    }
-    offsetX.value = 0
-    setTimeout(() => {
-      failed.value = false
-    }, 400)
+    clearFailCloseTimer()
+    failCloseTimer = window.setTimeout(() => {
+      closeCaptcha()
+    }, 280)
   }
 }
 
-async function onSubmit() {
-  if (!form.username.trim() || !form.password) {
-    ElMessage.warning('请输入用户名和密码')
-    return
-  }
-  if (!verified.value || !ticket.value) {
-    ElMessage.warning('请先完成滑动验证')
-    return
-  }
+async function submitLogin() {
   try {
     await auth.login({
       username: form.username.trim(),
@@ -223,14 +255,23 @@ async function onSubmit() {
   } catch (e) {
     const msg = e?.response?.data?.message || e?.message || '登录失败'
     ElMessage.error(msg)
-    await loadCaptcha()
+    closeCaptcha()
   }
 }
 
-onMounted(loadCaptcha)
+async function onSubmit() {
+  if (!form.username.trim() || !form.password) {
+    ElMessage.warning('请输入用户名和密码')
+    return
+  }
+  if (captchaVisible.value || auth.loading) return
+  captchaVisible.value = true
+  await loadCaptcha()
+}
+
 onBeforeUnmount(() => {
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
+  clearFailCloseTimer()
+  unbindPointer()
 })
 </script>
 
@@ -383,6 +424,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+:deep(.captcha-dialog) {
+  border-radius: 16px;
+}
+
+:deep(.captcha-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding-bottom: 8px;
+}
+
+:deep(.captcha-dialog .el-dialog__body) {
+  padding-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
 .puzzle {
   user-select: none;
 }
@@ -426,6 +482,11 @@ onBeforeUnmount(() => {
 
 .refresh:hover {
   background: rgba(255, 255, 255, 0.45);
+}
+
+.refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .slider {

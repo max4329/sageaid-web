@@ -24,6 +24,7 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column v-if="isAppKind" prop="multiOpenCount" label="多开数量" width="120" />
       <el-table-column v-if="isAppKind" label="过期时间" min-width="220">
         <template #default="{ row }">
           <el-tag v-if="isExpired(row.expiresAt)" type="danger" style="margin-right: 8px">已过期</el-tag>
@@ -51,7 +52,7 @@
     </el-table>
   </el-card>
 
-  <el-dialog v-model="dialogOpen" :title="isAppKind ? '新增系统账号' : '新增后台账号'" width="460px">
+  <el-dialog v-model="dialogOpen" :title="isAppKind ? '新增系统账号' : '新增后台账号'" width="500px">
     <el-form ref="formRef" :model="form" label-position="top">
       <el-form-item label="用户名" prop="username" :rules="usernameRules">
         <el-input v-model="form.username" placeholder="请输入用户名" />
@@ -65,15 +66,37 @@
           <el-option label="管理员" value="admin" />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="isAppKind" label="过期时间" prop="expiresIn" :rules="expiresInRules">
-        <el-select v-model="form.expiresIn" placeholder="请选择过期时间" style="width: 100%">
-          <el-option
+      <el-form-item v-if="isAppKind" label="多开数量" prop="multiOpenCount" :rules="multiOpenCountRules">
+        <el-input-number
+          v-model="form.multiOpenCount"
+          :min="1"
+          :step="1"
+          :precision="0"
+          :value-on-clear="1"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item v-if="isAppKind" label="过期时间" prop="expiresAt" :rules="expiresAtRules">
+        <div class="expire-shortcuts">
+          <el-tag
             v-for="item in expireOptions"
             :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
+            class="expire-tag"
+            :effect="expireShortcut === item.value ? 'dark' : 'plain'"
+            :type="expireShortcut === item.value ? 'primary' : 'info'"
+            @click="applyExpireShortcut(item)"
+          >
+            {{ item.label }}
+          </el-tag>
+        </div>
+        <el-date-picker
+          v-model="form.expiresAt"
+          type="datetime"
+          placeholder="请选择过期时间"
+          format="YYYY-MM-DD HH:mm:ss"
+          style="width: 100%"
+          @change="onExpirePickerChange"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -99,18 +122,21 @@ const keyword = ref('')
 
 const dialogOpen = ref(false)
 const formRef = ref()
+const expireShortcut = ref('1d')
+let skipExpirePickerChange = false
 const form = ref({
   username: '',
   password: '',
   role: 'user',
-  expiresIn: '1d',
+  expiresAt: null,
+  multiOpenCount: 1,
 })
 
 const expireOptions = [
-  { label: '1小时', value: '1h' },
-  { label: '1天', value: '1d' },
-  { label: '7天', value: '7d' },
-  { label: '一个月', value: '30d' },
+  { label: '1小时', value: '1h', ms: 60 * 60 * 1000 },
+  { label: '1天', value: '1d', ms: 24 * 60 * 60 * 1000 },
+  { label: '7天', value: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: '一个月', value: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
 ]
 
 const usernameRules = [
@@ -123,7 +149,42 @@ const passwordRules = [
   { min: 6, message: '密码至少 6 个字符', trigger: 'blur' },
 ]
 
-const expiresInRules = [{ required: true, message: '请选择过期时间', trigger: 'change' }]
+const multiOpenCountRules = [
+  { required: true, message: '请填写多开数量', trigger: 'change' },
+  {
+    validator: (_rule, value, callback) => {
+      if (!Number.isInteger(value) || value < 1) {
+        callback(new Error('多开数量必须是不小于 1 的正整数'))
+        return
+      }
+      callback()
+    },
+    trigger: 'change',
+  },
+]
+
+const expiresAtRules = [
+  { required: true, message: '请选择过期时间', trigger: 'change' },
+  {
+    validator: (_rule, value, callback) => {
+      if (!value) {
+        callback(new Error('请选择过期时间'))
+        return
+      }
+      const date = value instanceof Date ? value : new Date(value)
+      if (Number.isNaN(date.getTime())) {
+        callback(new Error('过期时间格式不正确'))
+        return
+      }
+      if (date.getTime() <= Date.now()) {
+        callback(new Error('过期时间必须晚于当前时间'))
+        return
+      }
+      callback()
+    },
+    trigger: 'change',
+  },
+]
 
 const accountKind = computed(() => (route.meta?.accountKind === 'admin' ? 'admin' : 'app'))
 const isAppKind = computed(() => accountKind.value === 'app')
@@ -180,11 +241,34 @@ async function fetchList() {
   }
 }
 
+function applyExpireShortcut(item) {
+  expireShortcut.value = item.value
+  skipExpirePickerChange = true
+  form.value.expiresAt = new Date(Date.now() + item.ms)
+  queueMicrotask(() => {
+    skipExpirePickerChange = false
+  })
+}
+
+function onExpirePickerChange() {
+  if (skipExpirePickerChange) return
+  expireShortcut.value = ''
+}
+
+function toIsoExpiresAt(value) {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString()
+}
+
 function openCreate() {
   form.value.username = ''
   form.value.password = ''
   form.value.role = isAppKind.value ? 'user' : 'admin'
-  form.value.expiresIn = '1d'
+  form.value.multiOpenCount = 1
+  expireShortcut.value = '1d'
+  form.value.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
   dialogOpen.value = true
 }
 
@@ -203,7 +287,8 @@ async function onSave() {
       password: String(form.value.password ?? ''),
       kind: accountKind.value,
       role: isAppKind.value ? 'user' : form.value.role,
-      expiresIn: isAppKind.value ? form.value.expiresIn : undefined,
+      expiresAt: isAppKind.value ? toIsoExpiresAt(form.value.expiresAt) : undefined,
+      multiOpenCount: isAppKind.value ? form.value.multiOpenCount : undefined,
     })
     dialogOpen.value = false
     await fetchList()
@@ -243,5 +328,17 @@ onMounted(fetchList)
 <style scoped>
 .actions-bar {
   margin: 12px 0;
+}
+
+.expire-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.expire-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>
