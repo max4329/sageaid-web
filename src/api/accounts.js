@@ -12,6 +12,11 @@ export async function createAccount(payload) {
   return data
 }
 
+export async function updateAccount(id, payload) {
+  const { data } = await http.patch(`/accounts/${id}`, payload)
+  return data
+}
+
 export async function deleteAccount(id) {
   const { data } = await http.delete(`/accounts/${id}`)
   return data

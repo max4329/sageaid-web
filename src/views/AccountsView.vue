@@ -36,8 +36,17 @@
           {{ formatTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" :width="isAppKind ? 180 : 140" fixed="right">
         <template #default="{ row }">
+          <el-button
+            v-if="isAppKind"
+            size="small"
+            type="primary"
+            plain
+            @click="openEdit(row)"
+          >
+            编辑
+          </el-button>
           <el-button
             size="small"
             type="danger"
@@ -52,13 +61,19 @@
     </el-table>
   </el-card>
 
-  <el-dialog v-model="dialogOpen" :title="isAppKind ? '新增系统账号' : '新增后台账号'" width="500px">
+  <el-dialog v-model="dialogOpen" :title="dialogTitle" width="500px">
     <el-form ref="formRef" :model="form" label-position="top">
       <el-form-item label="用户名" prop="username" :rules="usernameRules">
-        <el-input v-model="form.username" placeholder="请输入用户名" />
+        <el-input v-model="form.username" placeholder="请输入用户名" :disabled="isEdit" />
       </el-form-item>
       <el-form-item label="密码" prop="password" :rules="passwordRules">
-        <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" />
+        <el-input
+          v-model="form.password"
+          type="password"
+          show-password
+          :placeholder="isEdit ? '请输入新密码' : '请输入密码'"
+          @focus="onPasswordFocus"
+        />
       </el-form-item>
       <el-form-item v-if="!isAppKind" label="角色" prop="role">
         <el-select v-model="form.role" style="width: 100%">
@@ -107,10 +122,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createAccount, deleteAccount, getAccounts } from '../api/accounts'
+import { createAccount, deleteAccount, getAccounts, updateAccount } from '../api/accounts'
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
@@ -121,9 +136,13 @@ const items = ref([])
 const keyword = ref('')
 
 const dialogOpen = ref(false)
+const isEdit = ref(false)
+const editingId = ref(null)
 const formRef = ref()
 const expireShortcut = ref('1d')
 let skipExpirePickerChange = false
+const KEEP_PASSWORD = '********'
+
 const form = ref({
   username: '',
   password: '',
@@ -144,10 +163,36 @@ const usernameRules = [
   { min: 3, message: '用户名至少 3 个字符', trigger: 'blur' },
 ]
 
-const passwordRules = [
-  { required: true, message: '请输入密码', trigger: 'blur' },
-  { min: 6, message: '密码至少 6 个字符', trigger: 'blur' },
-]
+const passwordRules = computed(() => {
+  if (isEdit.value) {
+    return [
+      { required: true, message: '请输入密码', trigger: 'blur' },
+      {
+        validator: (_rule, value, callback) => {
+          const password = String(value ?? '')
+          if (!password) {
+            callback(new Error('请输入密码'))
+            return
+          }
+          if (password === KEEP_PASSWORD) {
+            callback()
+            return
+          }
+          if (password.length < 6) {
+            callback(new Error('密码至少 6 个字符'))
+            return
+          }
+          callback()
+        },
+        trigger: 'blur',
+      },
+    ]
+  }
+  return [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 个字符', trigger: 'blur' },
+  ]
+})
 
 const multiOpenCountRules = [
   { required: true, message: '请填写多开数量', trigger: 'change' },
@@ -188,6 +233,10 @@ const expiresAtRules = [
 
 const accountKind = computed(() => (route.meta?.accountKind === 'admin' ? 'admin' : 'app'))
 const isAppKind = computed(() => accountKind.value === 'app')
+const dialogTitle = computed(() => {
+  if (!isAppKind.value) return '新增后台账号'
+  return isEdit.value ? '编辑系统账号' : '新增系统账号'
+})
 
 const currentUserId = computed(() => {
   const token = String(auth.token || '')
@@ -262,7 +311,13 @@ function toIsoExpiresAt(value) {
   return date.toISOString()
 }
 
-function openCreate() {
+function onPasswordFocus(event) {
+  if (!isEdit.value || form.value.password !== KEEP_PASSWORD) return
+  const input = event?.target
+  if (input && typeof input.select === 'function') input.select()
+}
+  isEdit.value = false
+  editingId.value = null
   form.value.username = ''
   form.value.password = ''
   form.value.role = isAppKind.value ? 'user' : 'admin'
@@ -270,6 +325,20 @@ function openCreate() {
   expireShortcut.value = '1d'
   form.value.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
   dialogOpen.value = true
+  nextTick(() => formRef.value?.clearValidate())
+}
+
+function openEdit(row) {
+  isEdit.value = true
+  editingId.value = row.id
+  form.value.username = row.username || ''
+  form.value.password = KEEP_PASSWORD
+  form.value.role = 'user'
+  form.value.multiOpenCount = Number(row.multiOpenCount) > 0 ? Number(row.multiOpenCount) : 1
+  expireShortcut.value = ''
+  form.value.expiresAt = row.expiresAt ? new Date(row.expiresAt) : null
+  dialogOpen.value = true
+  nextTick(() => formRef.value?.clearValidate())
 }
 
 async function onSave() {
@@ -282,19 +351,29 @@ async function onSave() {
 
   saving.value = true
   try {
-    await createAccount({
-      username: String(form.value.username ?? '').trim(),
-      password: String(form.value.password ?? ''),
-      kind: accountKind.value,
-      role: isAppKind.value ? 'user' : form.value.role,
-      expiresAt: isAppKind.value ? toIsoExpiresAt(form.value.expiresAt) : undefined,
-      multiOpenCount: isAppKind.value ? form.value.multiOpenCount : undefined,
-    })
+    if (isEdit.value) {
+      const password = String(form.value.password ?? '')
+      await updateAccount(editingId.value, {
+        password: password && password !== KEEP_PASSWORD ? password : undefined,
+        expiresAt: toIsoExpiresAt(form.value.expiresAt),
+        multiOpenCount: form.value.multiOpenCount,
+      })
+      ElMessage.success('账号已更新')
+    } else {
+      await createAccount({
+        username: String(form.value.username ?? '').trim(),
+        password: String(form.value.password ?? ''),
+        kind: accountKind.value,
+        role: isAppKind.value ? 'user' : form.value.role,
+        expiresAt: isAppKind.value ? toIsoExpiresAt(form.value.expiresAt) : undefined,
+        multiOpenCount: isAppKind.value ? form.value.multiOpenCount : undefined,
+      })
+      ElMessage.success('账号已创建')
+    }
     dialogOpen.value = false
     await fetchList()
-    ElMessage.success('账号已创建')
   } catch (e) {
-    const msg = e?.response?.data?.message || e?.message || '创建失败'
+    const msg = e?.response?.data?.message || e?.message || (isEdit.value ? '更新失败' : '创建失败')
     ElMessage.error(msg)
   } finally {
     saving.value = false
