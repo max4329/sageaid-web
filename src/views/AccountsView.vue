@@ -71,8 +71,7 @@
           v-model="form.password"
           type="password"
           show-password
-          :placeholder="isEdit ? '请输入新密码' : '请输入密码'"
-          @focus="onPasswordFocus"
+          :placeholder="isEdit ? '不修改请留空' : '请输入密码'"
         />
       </el-form-item>
       <el-form-item v-if="!isAppKind" label="角色" prop="role">
@@ -141,7 +140,6 @@ const editingId = ref(null)
 const formRef = ref()
 const expireShortcut = ref('1d')
 let skipExpirePickerChange = false
-const KEEP_PASSWORD = '********'
 
 const form = ref({
   username: '',
@@ -166,15 +164,10 @@ const usernameRules = [
 const passwordRules = computed(() => {
   if (isEdit.value) {
     return [
-      { required: true, message: '请输入密码', trigger: 'blur' },
       {
         validator: (_rule, value, callback) => {
           const password = String(value ?? '')
           if (!password) {
-            callback(new Error('请输入密码'))
-            return
-          }
-          if (password === KEEP_PASSWORD) {
             callback()
             return
           }
@@ -311,11 +304,7 @@ function toIsoExpiresAt(value) {
   return date.toISOString()
 }
 
-function onPasswordFocus(event) {
-  if (!isEdit.value || form.value.password !== KEEP_PASSWORD) return
-  const input = event?.target
-  if (input && typeof input.select === 'function') input.select()
-}
+function openCreate() {
   isEdit.value = false
   editingId.value = null
   form.value.username = ''
@@ -332,7 +321,7 @@ function openEdit(row) {
   isEdit.value = true
   editingId.value = row.id
   form.value.username = row.username || ''
-  form.value.password = KEEP_PASSWORD
+  form.value.password = ''
   form.value.role = 'user'
   form.value.multiOpenCount = Number(row.multiOpenCount) > 0 ? Number(row.multiOpenCount) : 1
   expireShortcut.value = ''
@@ -354,7 +343,7 @@ async function onSave() {
     if (isEdit.value) {
       const password = String(form.value.password ?? '')
       await updateAccount(editingId.value, {
-        password: password && password !== KEEP_PASSWORD ? password : undefined,
+        password: password || undefined,
         expiresAt: toIsoExpiresAt(form.value.expiresAt),
         multiOpenCount: form.value.multiOpenCount,
       })
