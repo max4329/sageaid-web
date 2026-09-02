@@ -32,7 +32,7 @@
   <el-card shadow="never" style="margin-top: 12px">
     <el-table :data="items" v-loading="loading" stripe>
       <el-table-column prop="requesterUsername" label="用户" width="140" />
-      <el-table-column prop="windowId" label="窗口" width="140" />
+      <el-table-column prop="windowId" label="窗口" min-width="160" />
       <el-table-column label="底牌" width="200" show-overflow-tooltip>
         <template #default="{ row }">{{ handHole(row.handKey) }}</template>
       </el-table-column>
@@ -393,7 +393,7 @@ async function fetchList() {
   try {
     const [start, end] = Array.isArray(filters.timeRange) ? filters.timeRange : []
     const body = {
-      windowId: filters.windowId ? Number(filters.windowId) : undefined,
+      windowId: filters.windowId ? String(filters.windowId).trim() : undefined,
       username: filters.username || undefined,
       holeCards: filters.holeCards || undefined,
       startTime: start ? Number(start) : undefined,
@@ -452,7 +452,7 @@ async function onClear() {
     })
     const body = {
       username: filters.username || undefined,
-      windowId: filters.windowId ? Number(filters.windowId) : undefined,
+      windowId: filters.windowId ? String(filters.windowId).trim() : undefined,
     }
     const res = await clearAiLogs(body)
     ElMessage.success(`已清空 ${res?.deleted ?? 0} 条`)
