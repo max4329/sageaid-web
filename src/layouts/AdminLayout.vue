@@ -9,6 +9,7 @@
         <el-menu-item v-if="auth.isAdmin" index="/admin-accounts">后台账号</el-menu-item>
         <el-menu-item v-if="auth.isAdmin" index="/preflop-ranges">翻前范围</el-menu-item>
         <el-menu-item v-if="auth.isAdmin" index="/ally-nicks">队友名单</el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="/installer-packages">安装包管理</el-menu-item>
       </el-menu>
     </el-aside>
 

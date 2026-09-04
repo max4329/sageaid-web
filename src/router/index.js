@@ -7,6 +7,7 @@ import PlayersView from '../views/PlayersView.vue'
 import AllyNicksView from '../views/AllyNicksView.vue'
 import AccountsView from '../views/AccountsView.vue'
 import PreflopRangesView from '../views/PreflopRangesView.vue'
+import InstallerPackagesView from '../views/InstallerPackagesView.vue'
 import { useAuthStore } from '../stores/auth'
 
 function tokenKind() {
@@ -57,6 +58,12 @@ const router = createRouter({
           component: AccountsView,
           meta: { title: '后台账号', admin: true, accountKind: 'admin' },
         },
+        {
+          path: 'installer-packages',
+          name: 'installer-packages',
+          component: InstallerPackagesView,
+          meta: { title: '安装包管理', admin: true },
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/logs' },
@@ -79,5 +86,4 @@ router.beforeEach((to) => {
 })
 
 export default router
-
 
