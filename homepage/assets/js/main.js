@@ -7,8 +7,23 @@
   var button = document.getElementById('download-button')
   var label = document.getElementById('download-label')
   var error = document.getElementById('download-error')
+  var customerServiceTrigger = document.getElementById('customer-service-trigger')
+  var customerServiceDialog = document.getElementById('customer-service-dialog')
+  var customerServiceClose = document.getElementById('customer-service-close')
 
   document.getElementById('year').textContent = String(new Date().getFullYear())
+
+  customerServiceTrigger.addEventListener('click', function () {
+    customerServiceDialog.showModal()
+  })
+
+  customerServiceClose.addEventListener('click', function () {
+    customerServiceDialog.close()
+  })
+
+  customerServiceDialog.addEventListener('click', function (event) {
+    if (event.target === customerServiceDialog) customerServiceDialog.close()
+  })
 
   function formatBytes(value) {
     var bytes = Number(value)

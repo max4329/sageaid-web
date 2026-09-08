@@ -15,7 +15,15 @@
         <span class="brand-mark" aria-hidden="true">S</span>
         <span>SageAid</span>
       </a>
-      <a class="header-download" href="#download">下载 Windows 版</a>
+      <button class="customer-service-trigger" id="customer-service-trigger" type="button" aria-haspopup="dialog" aria-controls="customer-service-dialog">
+        <span class="customer-service-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M7.5 18.5 4 20l1-3.5a8 8 0 1 1 2.5 2Z" />
+            <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" />
+          </svg>
+        </span>
+        <span>联系客服</span>
+      </button>
     </header>
 
     <main id="top">
@@ -27,7 +35,7 @@
             </svg>
             Windows 客户端
           </span>
-          <h1>下载 SageAid</h1>
+          <h1>下载 <span>SageAid</span></h1>
           <p class="intro">获取最新版 Windows 安装包。安装后登录你的账号即可使用。</p>
 
           <a id="download-button" class="download-button is-loading" href="#" aria-disabled="true">
@@ -61,24 +69,6 @@
         </aside>
       </section>
 
-      <section class="details" aria-label="安装说明">
-        <div>
-          <span class="step">01</span>
-          <h2>下载安装包</h2>
-          <p>点击上方按钮保存最新版安装文件。</p>
-        </div>
-        <div>
-          <span class="step">02</span>
-          <h2>完成安装</h2>
-          <p>双击安装包，按照系统提示完成安装。</p>
-        </div>
-        <div>
-          <span class="step">03</span>
-          <h2>登录使用</h2>
-          <p>启动 SageAid，使用已有账号登录。</p>
-        </div>
-      </section>
-
       <section id="release-notes" class="release-notes" hidden>
         <p class="eyebrow">本次更新</p>
         <p id="release-notes-text"></p>
@@ -89,6 +79,24 @@
       <span>© <span id="year"></span> SageAid</span>
       <span>请仅在合法合规、已获授权的环境中使用。</span>
     </footer>
+
+    <dialog class="customer-service-dialog" id="customer-service-dialog" aria-labelledby="customer-service-title">
+      <div class="customer-service-modal">
+        <div class="customer-service-heading">
+          <div>
+            <p class="eyebrow">CUSTOMER SERVICE</p>
+            <h2 id="customer-service-title">联系客服</h2>
+            <p>扫描二维码，添加专属客服</p>
+          </div>
+          <button class="customer-service-close" id="customer-service-close" type="button" aria-label="关闭客服弹窗">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <img src="assets/img/customer-service.png" alt="Telegram 客服二维码" />
+      </div>
+    </dialog>
 
     <script src="assets/js/config.js"></script>
     <script src="assets/js/main.js"></script>
